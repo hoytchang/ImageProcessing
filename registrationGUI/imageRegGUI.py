@@ -1,6 +1,11 @@
 import wx
+import scipy as sp
+import imreg_dft as ird
 
-ThumbMaxSize = 240
+ThumbMaxSize = 360
+image2scaledFile = "image2scaled.jpg"
+overlayFile = 'overlay.jpg'
+OutputMaxSize = 360
 
 # Define File Drop Target class
 class FileDropTarget(wx.FileDropTarget):
@@ -56,12 +61,18 @@ class MainWindow(wx.Frame):
         # define images
         img1 = wx.Image(ThumbMaxSize,ThumbMaxSize)
         img2 = wx.Image(ThumbMaxSize,ThumbMaxSize)
+        img3 = wx.Image(OutputMaxSize, OutputMaxSize)
         self.imageCtrl1 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img1), pos=(10,65))
         self.imageCtrl2 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img2), pos=(410,65))
+        self.imageCtrl3 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img3), pos=(10,480))
 
         # Create a File Drop Target object
         dt1 = FileDropTarget(self.text1, self.imageCtrl1, self)
         dt2 = FileDropTarget(self.text2, self.imageCtrl2, self)
+
+        # define button
+        button1 = wx.Button(self, -1, "Align", pos=(10,450))
+        button1.Bind(wx.EVT_BUTTON, self.onAlign)
 
         # Link the Drop Target Object to the Text Control
         self.text1.SetDropTarget(dt1)
@@ -70,6 +81,40 @@ class MainWindow(wx.Frame):
         # Display the Window
         self.Show(True)
 
+    def onAlign(self, button):
+        # get paths
+        path1 = self.text1.GetValue()
+        path2 = self.text2.GetValue()
+        
+        if(path1 != "" and path2 != ""):
+            # scale image 2
+            im1wx = wx.Image(path1, wx.BITMAP_TYPE_ANY)
+            im2wx = wx.Image(path2, wx.BITMAP_TYPE_ANY)
+            w1 = im1wx.GetWidth()
+            h1 = im1wx.GetHeight()
+            w2 = im2wx.GetWidth()
+            h2 = im2wx.GetHeight()
+            im2scaled = im2wx.Scale(w1,h1) # not a good scaling method
+            im2scaled.SaveFile(image2scaledFile)
+
+            # read in image 1 and scaled image 2
+            im1 = sp.misc.imread(path1,True)
+            im2 = sp.misc.imread(image2scaledFile,True)
+
+            # align image 2
+            result = ird.similarity(im1, im2, numiter=3)
+            assert "timg" in result
+            im2aligned = result['timg']
+
+            # overlay
+            overlay = im1 + im2aligned
+            sp.misc.imsave(overlayFile,overlay)
+
+            # display overlay
+            img3 = wx.Image(overlayFile, wx.BITMAP_TYPE_ANY)
+            img3resized = img3.Scale(OutputMaxSize,OutputMaxSize)
+            self.imageCtrl3.SetBitmap(wx.Bitmap(img3resized))
+            self.Refresh()
 
 
 class MyApp(wx.App):
