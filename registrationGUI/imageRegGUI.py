@@ -1,11 +1,14 @@
 import wx
 import scipy as sp
 import imreg_dft as ird
+import PyQt5
+from PyQt5 import QtCore, QtGui
 
 ThumbMaxSize = 360
 image2scaledFile = "image2scaled.jpg"
 overlayFile = 'overlay.jpg'
 OutputMaxSize = 360
+NoFileSelected = "No File Selected"
 
 # Define File Drop Target class
 class FileDropTarget(wx.FileDropTarget):
@@ -49,14 +52,16 @@ class FileDropTarget(wx.FileDropTarget):
 class MainWindow(wx.Frame):
     """ This window displays the GUI Widgets. """
     def __init__(self,parent,id,title):
-        wx.Frame.__init__(self,parent, wx.ID_ANY, title, size = (800,600), style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
+        wx.Frame.__init__(self,parent, wx.ID_ANY, title, size = (800,900), style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
         self.SetBackgroundColour(wx.WHITE)
 
         # GUI Widgets
-        wx.StaticText(self, -1, "Drag and Drop Image 1", (10, 15))
-        wx.StaticText(self, -1, "Drag and Drop Image 2", (410, 15))
+        wx.StaticText(self, -1, "Drag and Drop Image File 1", (10, 15))
+        wx.StaticText(self, -1, "Drag and Drop Image File 2", (410, 15))
         self.text1 = wx.TextCtrl(self, -1, "", pos=(10,35), size=(360,20), style = wx.TE_READONLY)
         self.text2 = wx.TextCtrl(self, -1, "", pos=(410,35), size=(360,20), style = wx.TE_READONLY)
+        self.text1.WriteText(NoFileSelected)
+        self.text2.WriteText(NoFileSelected)
 
         # define images
         img1 = wx.Image(ThumbMaxSize,ThumbMaxSize)
@@ -70,13 +75,15 @@ class MainWindow(wx.Frame):
         dt1 = FileDropTarget(self.text1, self.imageCtrl1, self)
         dt2 = FileDropTarget(self.text2, self.imageCtrl2, self)
 
-        # define button
-        button1 = wx.Button(self, -1, "Align", pos=(10,450))
-        button1.Bind(wx.EVT_BUTTON, self.onAlign)
+        # define buttons
+        buttonAlign = wx.Button(self, -1, "Align", pos=(10,450))
+        buttonAlign.Bind(wx.EVT_BUTTON, self.onAlign)
+        buttonCopyToClipboard = wx.Button(self, -1, "Copy Image To Clipboard", pos=(120,450))
+        buttonCopyToClipboard.Bind(wx.EVT_BUTTON, self.onCopyToClipboard)
 
-        # Link the Drop Target Object to the Text Control
-        self.text1.SetDropTarget(dt1)
-        self.text2.SetDropTarget(dt2)
+        # Link the Drop Target Object to the Image Control
+        self.imageCtrl1.SetDropTarget(dt1)
+        self.imageCtrl2.SetDropTarget(dt2)
 
         # Display the Window
         self.Show(True)
@@ -86,7 +93,7 @@ class MainWindow(wx.Frame):
         path1 = self.text1.GetValue()
         path2 = self.text2.GetValue()
         
-        if(path1 != "" and path2 != ""):
+        if(path1 != NoFileSelected and path2 != NoFileSelected):
             # scale image 2
             im1wx = wx.Image(path1, wx.BITMAP_TYPE_ANY)
             im2wx = wx.Image(path2, wx.BITMAP_TYPE_ANY)
@@ -111,10 +118,21 @@ class MainWindow(wx.Frame):
             sp.misc.imsave(overlayFile,overlay)
 
             # display overlay
-            img3 = wx.Image(overlayFile, wx.BITMAP_TYPE_ANY)
-            img3resized = img3.Scale(OutputMaxSize,OutputMaxSize)
+            self.img3 = wx.Image(overlayFile, wx.BITMAP_TYPE_ANY)
+            img3resized = self.img3.Scale(OutputMaxSize,OutputMaxSize)
             self.imageCtrl3.SetBitmap(wx.Bitmap(img3resized))
             self.Refresh()
+
+    def onCopyToClipboard(self, button):
+        try:
+            self.img3
+        except:
+            return
+
+        temp_variable = self.img3
+        # TODO
+
+
 
 
 class MyApp(wx.App):
