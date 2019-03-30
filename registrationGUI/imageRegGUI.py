@@ -5,6 +5,7 @@ import PyQt5
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QImage
 import os
+from threading import Thread
 
 ThumbMaxSize = 360
 image2scaledFile = "image2scaled.jpg"
@@ -98,38 +99,7 @@ class MainWindow(wx.Frame):
         path2 = self.text2.GetValue()
         
         if(path1 != NoFileSelected and path2 != NoFileSelected):
-            self.alignStatus.Show() #does not work, needs threading
-
-            # scale image 2
-            im1wx = wx.Image(path1, wx.BITMAP_TYPE_ANY)
-            im2wx = wx.Image(path2, wx.BITMAP_TYPE_ANY)
-            w1 = im1wx.GetWidth()
-            h1 = im1wx.GetHeight()
-            w2 = im2wx.GetWidth()
-            h2 = im2wx.GetHeight()
-            im2scaled = im2wx.Scale(w1,h1) # not a good scaling method
-            im2scaled.SaveFile(image2scaledFile)
-
-            # read in image 1 and scaled image 2
-            im1 = sp.misc.imread(path1,True)
-            im2 = sp.misc.imread(image2scaledFile,True)
-
-            # align image 2
-            result = ird.similarity(im1, im2, numiter=3)
-            assert "timg" in result
-            im2aligned = result['timg']
-
-            # overlay
-            overlay = im1 + im2aligned
-            sp.misc.imsave(overlayFile,overlay)
-
-            # display overlay
-            self.img3 = wx.Image(overlayFile, wx.BITMAP_TYPE_ANY)
-            img3resized = self.img3.Scale(OutputMaxSize,OutputMaxSize)
-            self.imageCtrl3.SetBitmap(wx.Bitmap(img3resized))
-            self.Refresh()
-
-            self.alignStatus.Hide()
+            worker = AlignWorkerThread(self, path1, path2)
 
     def onCopyToClipboard(self, button):
         # check that im3 exists
@@ -146,6 +116,50 @@ class MainWindow(wx.Frame):
         url = QtCore.QUrl.fromLocalFile(overlayFilePath)
         data.setUrls([url])
         app.clipboard().setMimeData(data)
+
+class AlignWorkerThread(Thread):
+    
+    def __init__(self, frame, path1, path2):
+        Thread.__init__(self)
+        self.frame = frame
+        self.path1 = path1
+        self.path2 = path2
+        self.start()
+    
+    def run(self):
+        # this needs to be in a thread to not lock up the gui
+        self.frame.alignStatus.Show() 
+
+        # scale image 2
+        im1wx = wx.Image(self.path1, wx.BITMAP_TYPE_ANY)
+        im2wx = wx.Image(self.path2, wx.BITMAP_TYPE_ANY)
+        w1 = im1wx.GetWidth()
+        h1 = im1wx.GetHeight()
+        w2 = im2wx.GetWidth()
+        h2 = im2wx.GetHeight()
+        im2scaled = im2wx.Scale(w1,h1) # not a good scaling method
+        im2scaled.SaveFile(image2scaledFile)
+
+        # read in image 1 and scaled image 2
+        im1 = sp.misc.imread(self.path1,True)
+        im2 = sp.misc.imread(image2scaledFile,True)
+
+        # align image 2
+        result = ird.similarity(im1, im2, numiter=3)
+        assert "timg" in result
+        im2aligned = result['timg']
+
+        # overlay
+        overlay = im1 + im2aligned
+        sp.misc.imsave(overlayFile,overlay)
+
+        # display overlay
+        self.frame.img3 = wx.Image(overlayFile, wx.BITMAP_TYPE_ANY)
+        img3resized = self.frame.img3.Scale(OutputMaxSize,OutputMaxSize)
+        self.frame.imageCtrl3.SetBitmap(wx.Bitmap(img3resized))
+        self.frame.Refresh()
+
+        self.frame.alignStatus.Hide()
 
 class MyApp(wx.App):
     """ Define the Drag and Drop Example Application """
