@@ -2,7 +2,9 @@ import wx
 import scipy as sp
 import imreg_dft as ird
 import PyQt5
-from PyQt5 import QtCore, QtGui
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtGui import QImage
+import os
 
 ThumbMaxSize = 360
 image2scaledFile = "image2scaled.jpg"
@@ -55,13 +57,15 @@ class MainWindow(wx.Frame):
         wx.Frame.__init__(self,parent, wx.ID_ANY, title, size = (800,900), style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
         self.SetBackgroundColour(wx.WHITE)
 
-        # GUI Widgets
+        # define text
         wx.StaticText(self, -1, "Drag and Drop Image File 1", (10, 15))
         wx.StaticText(self, -1, "Drag and Drop Image File 2", (410, 15))
         self.text1 = wx.TextCtrl(self, -1, "", pos=(10,35), size=(360,20), style = wx.TE_READONLY)
         self.text2 = wx.TextCtrl(self, -1, "", pos=(410,35), size=(360,20), style = wx.TE_READONLY)
         self.text1.WriteText(NoFileSelected)
         self.text2.WriteText(NoFileSelected)
+        self.alignStatus = wx.StaticText(self, -1, "Aligning...Please Wait", (520,455))
+        self.alignStatus.Hide()
 
         # define images
         img1 = wx.Image(ThumbMaxSize,ThumbMaxSize)
@@ -69,16 +73,16 @@ class MainWindow(wx.Frame):
         img3 = wx.Image(OutputMaxSize, OutputMaxSize)
         self.imageCtrl1 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img1), pos=(10,65))
         self.imageCtrl2 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img2), pos=(410,65))
-        self.imageCtrl3 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img3), pos=(10,480))
+        self.imageCtrl3 = wx.StaticBitmap(self, wx.ID_ANY, wx.Bitmap(img3), pos=(10,450))
 
         # Create a File Drop Target object
         dt1 = FileDropTarget(self.text1, self.imageCtrl1, self)
         dt2 = FileDropTarget(self.text2, self.imageCtrl2, self)
 
         # define buttons
-        buttonAlign = wx.Button(self, -1, "Align", pos=(10,450))
+        buttonAlign = wx.Button(self, -1, "Align", pos=(410,450))
         buttonAlign.Bind(wx.EVT_BUTTON, self.onAlign)
-        buttonCopyToClipboard = wx.Button(self, -1, "Copy Image To Clipboard", pos=(120,450))
+        buttonCopyToClipboard = wx.Button(self, -1, "Copy Image To Clipboard", pos=(410,480))
         buttonCopyToClipboard.Bind(wx.EVT_BUTTON, self.onCopyToClipboard)
 
         # Link the Drop Target Object to the Image Control
@@ -94,6 +98,8 @@ class MainWindow(wx.Frame):
         path2 = self.text2.GetValue()
         
         if(path1 != NoFileSelected and path2 != NoFileSelected):
+            self.alignStatus.Show() #does not work, needs threading
+
             # scale image 2
             im1wx = wx.Image(path1, wx.BITMAP_TYPE_ANY)
             im2wx = wx.Image(path2, wx.BITMAP_TYPE_ANY)
@@ -123,17 +129,23 @@ class MainWindow(wx.Frame):
             self.imageCtrl3.SetBitmap(wx.Bitmap(img3resized))
             self.Refresh()
 
+            self.alignStatus.Hide()
+
     def onCopyToClipboard(self, button):
+        # check that im3 exists
         try:
             self.img3
         except:
             return
 
-        temp_variable = self.img3
-        # TODO
-
-
-
+        # copy overlay image file to clipboard
+        app = QtWidgets.QApplication([])
+        data = QtCore.QMimeData()
+        cwd = os.getcwd()
+        overlayFilePath = os.path.join(cwd, overlayFile)
+        url = QtCore.QUrl.fromLocalFile(overlayFilePath)
+        data.setUrls([url])
+        app.clipboard().setMimeData(data)
 
 class MyApp(wx.App):
     """ Define the Drag and Drop Example Application """
