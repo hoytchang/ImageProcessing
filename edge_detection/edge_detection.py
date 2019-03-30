@@ -5,7 +5,7 @@ from skimage import feature
 
 # Read in CT scan from 
 # https://www.yxlon.com/Yxlon/media/Content/Applications/Aerospace/Turbine%20blades/CT-feanbeame_Aerospace_Turbine_blade_001_144.jpg?ext=.jpg
-filename = 'CT-feanbeame_Aerospace_Turbine_blade_001_144.jpg'
+filename = 'istockphoto-683494078-612x612.jpg'
 img = skimage.io.imread(filename)
 
 # Convert to greyscale

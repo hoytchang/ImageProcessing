@@ -6,8 +6,11 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtGui import QImage
 import os
 from threading import Thread
+import skimage
 
 ThumbMaxSize = 360
+edges1File = 'image1edges.jpg'
+edges2File = 'image2edges.jpg'
 image2scaledFile = "image2scaled.jpg"
 overlayFile = 'overlay.jpg'
 OutputMaxSize = 360
@@ -15,13 +18,12 @@ NoFileSelected = "No File Selected"
 
 # Define File Drop Target class
 class FileDropTarget(wx.FileDropTarget):
-    """ This object implements Drop Target functionality for Files """
+
     def __init__(self, obj, imageCtrl, frame):
         """ Initialize the Drop Target, passing in the Object Reference to
           indicate what should receive the dropped files """
         # Initialize the wxFileDropTarget Object
         wx.FileDropTarget.__init__(self)
-        # Store the Object Reference for dropped files
         self.obj = obj
         self.imageCtrl = imageCtrl
         self.frame = frame
@@ -44,10 +46,10 @@ class FileDropTarget(wx.FileDropTarget):
         else:
             NewH = ThumbMaxSize
             NewW = ThumbMaxSize * W / H
-        img = img.Scale(NewW,NewH)
+        imgThumb = img.Scale(NewW,NewH)
 
         # assign image to image control
-        self.imageCtrl.SetBitmap(wx.Bitmap(img))
+        self.imageCtrl.SetBitmap(wx.Bitmap(imgThumb))
         self.frame.Refresh()
 
         return True
@@ -125,14 +127,29 @@ class AlignWorkerThread(Thread):
         self.path1 = path1
         self.path2 = path2
         self.start()
-    
+
+    def detectEdges(self, path):
+        img = skimage.io.imread(path)
+        img_grey = skimage.color.rgb2grey(img)
+        edge_sobel = skimage.filters.sobel(img_grey)
+        edge_inverted = skimage.util.invert(edge_sobel)
+        return edge_inverted
+
     def run(self):
         # this needs to be in a thread to not lock up the gui
         self.frame.alignStatus.Show() 
 
+        # apply edge detection to both input images
+        skim1edges = self.detectEdges(self.path1)
+        skim2edges = self.detectEdges(self.path2)
+        skimage.io.imsave(edges1File,skim1edges)
+        skimage.io.imsave(edges2File,skim2edges)
+
         # scale image 2
-        im1wx = wx.Image(self.path1, wx.BITMAP_TYPE_ANY)
-        im2wx = wx.Image(self.path2, wx.BITMAP_TYPE_ANY)
+        #im1wx = wx.Image(self.path1, wx.BITMAP_TYPE_ANY)
+        #im2wx = wx.Image(self.path2, wx.BITMAP_TYPE_ANY)
+        im1wx = wx.Image(edges1File, wx.BITMAP_TYPE_ANY)
+        im2wx = wx.Image(edges2File, wx.BITMAP_TYPE_ANY)
         w1 = im1wx.GetWidth()
         h1 = im1wx.GetHeight()
         w2 = im2wx.GetWidth()
@@ -141,7 +158,8 @@ class AlignWorkerThread(Thread):
         im2scaled.SaveFile(image2scaledFile)
 
         # read in image 1 and scaled image 2
-        im1 = sp.misc.imread(self.path1,True)
+        #im1 = sp.misc.imread(self.path1,True)
+        im1 = sp.misc.imread(edges1File,True)
         im2 = sp.misc.imread(image2scaledFile,True)
 
         # align image 2
@@ -155,19 +173,15 @@ class AlignWorkerThread(Thread):
 
         # display overlay
         self.frame.img3 = wx.Image(overlayFile, wx.BITMAP_TYPE_ANY)
-        img3resized = self.frame.img3.Scale(OutputMaxSize,OutputMaxSize)
-        self.frame.imageCtrl3.SetBitmap(wx.Bitmap(img3resized))
+        img3thumb = self.frame.img3.Scale(OutputMaxSize,OutputMaxSize)
+        self.frame.imageCtrl3.SetBitmap(wx.Bitmap(img3thumb))
         self.frame.Refresh()
 
         self.frame.alignStatus.Hide()
 
 class MyApp(wx.App):
-    """ Define the Drag and Drop Example Application """
     def OnInit(self):
-        """ Initialize the Application """
-        # Declare the Main Application Window
         frame = MainWindow(None, -1, "Image Alignment Tool")
-        # Show the Application as the top window
         self.SetTopWindow(frame)
         return True
 
