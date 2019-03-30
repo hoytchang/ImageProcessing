@@ -67,7 +67,7 @@ class MainWindow(wx.Frame):
         self.text2 = wx.TextCtrl(self, -1, "", pos=(410,35), size=(360,20), style = wx.TE_READONLY)
         self.text1.WriteText(NoFileSelected)
         self.text2.WriteText(NoFileSelected)
-        self.alignStatus = wx.StaticText(self, -1, "Aligning...Please Wait", (520,455))
+        self.alignStatus = wx.StaticText(self, -1, "Aligning...Please Wait", (520,485))
         self.alignStatus.Hide()
 
         # define images
@@ -82,10 +82,11 @@ class MainWindow(wx.Frame):
         dt1 = FileDropTarget(self.text1, self.imageCtrl1, self)
         dt2 = FileDropTarget(self.text2, self.imageCtrl2, self)
 
-        # define buttons
-        buttonAlign = wx.Button(self, -1, "Align", pos=(410,450))
+        # define check box and buttons
+        self.detectEdges = wx.CheckBox(self, -1, "Detect Edges", pos = (410,450))
+        buttonAlign = wx.Button(self, -1, "Align", pos=(410,480))
         buttonAlign.Bind(wx.EVT_BUTTON, self.onAlign)
-        buttonCopyToClipboard = wx.Button(self, -1, "Copy Image To Clipboard", pos=(410,480))
+        buttonCopyToClipboard = wx.Button(self, -1, "Copy Image To Clipboard", pos=(410,510))
         buttonCopyToClipboard.Bind(wx.EVT_BUTTON, self.onCopyToClipboard)
 
         # Link the Drop Target Object to the Image Control
@@ -101,7 +102,8 @@ class MainWindow(wx.Frame):
         path2 = self.text2.GetValue()
         
         if(path1 != NoFileSelected and path2 != NoFileSelected):
-            worker = AlignWorkerThread(self, path1, path2)
+            detectEdges = self.detectEdges.GetValue()
+            worker = AlignWorkerThread(self, path1, path2, detectEdges)
 
     def onCopyToClipboard(self, button):
         # check that im3 exists
@@ -121,11 +123,12 @@ class MainWindow(wx.Frame):
 
 class AlignWorkerThread(Thread):
     
-    def __init__(self, frame, path1, path2):
+    def __init__(self, frame, path1, path2, detectEdgesBool):
         Thread.__init__(self)
         self.frame = frame
         self.path1 = path1
         self.path2 = path2
+        self.detectEdgesBool = detectEdgesBool
         self.start()
 
     def detectEdges(self, path):
@@ -140,16 +143,18 @@ class AlignWorkerThread(Thread):
         self.frame.alignStatus.Show() 
 
         # apply edge detection to both input images
-        skim1edges = self.detectEdges(self.path1)
-        skim2edges = self.detectEdges(self.path2)
-        skimage.io.imsave(edges1File,skim1edges)
-        skimage.io.imsave(edges2File,skim2edges)
+        if(self.detectEdgesBool):
+            skim1edges = self.detectEdges(self.path1)
+            skim2edges = self.detectEdges(self.path2)
+            skimage.io.imsave(edges1File,skim1edges)
+            skimage.io.imsave(edges2File,skim2edges)
+            im1wx = wx.Image(edges1File, wx.BITMAP_TYPE_ANY)
+            im2wx = wx.Image(edges2File, wx.BITMAP_TYPE_ANY)
+        else:
+            im1wx = wx.Image(self.path1, wx.BITMAP_TYPE_ANY)
+            im2wx = wx.Image(self.path2, wx.BITMAP_TYPE_ANY)
 
         # scale image 2
-        #im1wx = wx.Image(self.path1, wx.BITMAP_TYPE_ANY)
-        #im2wx = wx.Image(self.path2, wx.BITMAP_TYPE_ANY)
-        im1wx = wx.Image(edges1File, wx.BITMAP_TYPE_ANY)
-        im2wx = wx.Image(edges2File, wx.BITMAP_TYPE_ANY)
         w1 = im1wx.GetWidth()
         h1 = im1wx.GetHeight()
         w2 = im2wx.GetWidth()
@@ -158,8 +163,10 @@ class AlignWorkerThread(Thread):
         im2scaled.SaveFile(image2scaledFile)
 
         # read in image 1 and scaled image 2
-        #im1 = sp.misc.imread(self.path1,True)
-        im1 = sp.misc.imread(edges1File,True)
+        if(self.detectEdgesBool):
+            im1 = sp.misc.imread(edges1File,True)
+        else:
+            im1 = sp.misc.imread(self.path1,True)
         im2 = sp.misc.imread(image2scaledFile,True)
 
         # align image 2
