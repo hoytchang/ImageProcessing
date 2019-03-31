@@ -1,9 +1,4 @@
 import wx
-#import scipy as sp
-#import imreg_dft as ird
-#import PyQt5
-#from PyQt5 import QtCore, QtGui, QtWidgets
-#from PyQt5.QtGui import QImage
 import os
 from threading import Thread
 import skimage
@@ -11,13 +6,7 @@ from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
 
-#ThumbMaxSize = 360
-#edges1File = 'image1edges.jpg'
-#edges2File = 'image2edges.jpg'
-#image2scaledFile = "image2scaled.jpg"
-#overlayFile = 'overlay.jpg'
-#OutputMaxSize = 360
-NoFileSelected = "No File Selected"
+NoFileSelected = "Browse or Drag and Drop Image File Here"
 
 # Define File Drop Target class
 class FileDropTarget(wx.FileDropTarget):
@@ -40,14 +29,14 @@ class FileDropTarget(wx.FileDropTarget):
 class MainWindow(wx.Frame):
     """ This window displays the GUI Widgets. """
     def __init__(self,parent,id,title):
-        wx.Frame.__init__(self,parent, wx.ID_ANY, title, size = (400,220), style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
+        wx.Frame.__init__(self,parent, wx.ID_ANY, title, size = (500,240), style=wx.DEFAULT_FRAME_STYLE|wx.NO_FULL_REPAINT_ON_RESIZE)
         self.SetBackgroundColour(wx.WHITE)
 
         # define text
-        wx.StaticText(self, -1, "Drag and Drop Reference Image File", (10, 15))
+        wx.StaticText(self, -1, "Reference Image", (10, 15))
         self.text1 = wx.TextCtrl(self, -1, "", pos=(10,35), size=(360,20), style = wx.TE_READONLY)
-        wx.StaticText(self, -1, "Drag and Drop Moving Image File", (10, 60))
-        self.text2 = wx.TextCtrl(self, -1, "", pos=(10,80), size=(360,20), style = wx.TE_READONLY)
+        wx.StaticText(self, -1, "Moving Image", (10, 70))
+        self.text2 = wx.TextCtrl(self, -1, "", pos=(10,90), size=(360,20), style = wx.TE_READONLY)
         self.text1.WriteText(NoFileSelected)
         self.text2.WriteText(NoFileSelected)
 
@@ -55,9 +44,15 @@ class MainWindow(wx.Frame):
         dt1 = FileDropTarget(self.text1, self)
         dt2 = FileDropTarget(self.text2, self)
 
+        # dialog buttons
+        buttonBrowse1 = wx.Button(self, -1, "Browse", pos=(375,30))
+        buttonBrowse2 = wx.Button(self, -1, "Browse", pos=(375,85))
+        buttonBrowse1.Bind(wx.EVT_BUTTON, self.onBrowse1)
+        buttonBrowse2.Bind(wx.EVT_BUTTON, self.onBrowse2)
+
         # define check box and buttons
-        self.detectEdgesBool = wx.CheckBox(self, -1, "Detect Edges", pos = (10,120))
-        buttonAlign = wx.Button(self, -1, "Align", pos=(10,140))
+        self.detectEdgesBool = wx.CheckBox(self, -1, "Detect Edges", pos = (10,130))
+        buttonAlign = wx.Button(self, -1, "Align", pos=(10,150))
         buttonAlign.Bind(wx.EVT_BUTTON, self.onAlign)
 
         # Link the Drop Target Object to the Image Control
@@ -66,6 +61,22 @@ class MainWindow(wx.Frame):
 
         # Display the Window
         self.Show(True)
+
+    def onBrowse1(self, button):
+        openFileDialog = wx.FileDialog(self, "Open", "", "", "Image files |*.*", wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        openFileDialog.ShowModal()
+        self.text1.Clear()
+        path = openFileDialog.GetPath()
+        self.text1.WriteText(path)
+        openFileDialog.Destroy()
+
+    def onBrowse2(self, button):
+        openFileDialog = wx.FileDialog(self, "Open", "", "", "Image files |*.*", wx.FD_OPEN | wx.FD_FILE_MUST_EXIST)
+        openFileDialog.ShowModal()
+        self.text2.Clear()
+        path = openFileDialog.GetPath()
+        self.text2.WriteText(path)
+        openFileDialog.Destroy()
 
     def onAlign(self, button):
         # get paths
@@ -86,8 +97,7 @@ class AlignWorkerThread(Thread):
         self.detectEdgesBool = detectEdgesBool
         self.start()
 
-    def detectEdges(self, path):
-        img = skimage.io.imread(path)
+    def detectEdges(self, img):
         img_grey = skimage.color.rgb2grey(img)
         edge_sobel = skimage.filters.sobel(img_grey)
         edge_inverted = skimage.util.invert(edge_sobel)
@@ -98,14 +108,25 @@ class AlignWorkerThread(Thread):
         Alternately click on image 0 and 1, indicating the same feature.
         """
         f, (ax0, ax1) = plt.subplots(1, 2)
-        ax0.imshow(img0)
-        ax1.imshow(img1)
+        if(self.detectEdgesBool):
+            ax0.imshow(img0, cmap=plt.cm.gray)
+            ax1.imshow(img1, cmap=plt.cm.gray)
+        else:
+            ax0.imshow(img0)
+            ax1.imshow(img1)
         coords = plt.ginput(8, timeout=0)
         np.savez('_reg_coords.npz', source=coords[::2], target=coords[1::2])
         plt.close()
 
     def toRGB(self, img):
         # convert png to jgp
+        # png has shape (height, width, 4)
+        # jpg has shape (height, width, 3)
+        try:
+            img.shape[2]
+        except:
+            return img
+
         if(img.shape[2] == 4):
             return skimage.color.rgba2rgb(img)
         else:
@@ -113,46 +134,43 @@ class AlignWorkerThread(Thread):
 
     def run(self):
         # this needs to be in a thread to not lock up the gui
+        img0 = io.imread(self.path1)
+        img1 = io.imread(self.path2)
 
         # apply edge detection to both input images
         if(self.detectEdgesBool):
-            pass
-        else:
-            pass
-
-        img0 = io.imread(self.path1)
-        img1 = io.imread(self.path2)
+            img0 = self.detectEdges(img0)
+            img1 = self.detectEdges(img1)
 
         # have user select reference points to define transformation
         self.choose_corresponding_points(img0, img1)
         coords = np.load('_reg_coords.npz')
 
-        # transform image
+        # transform image 1 to image 0
         tf = transform.estimate_transform('similarity', coords['source'], coords['target'])
         offset = transform.SimilarityTransform(translation=(0, 0))
         h0 = img0.shape[0]
         w0 = img0.shape[1]
-        #h1 = img1.shape[0]
-        #w1 = img1.shape[1]
-        #maxSize = max(h0,w0,h1,w1)
         img0_warped = transform.warp(img0, inverse_map=offset, output_shape=(h0, w0))
         img1_warped = transform.warp(img1, inverse_map= tf, output_shape=(h0, w0))
 
         # check for different numpy shapes
-        # png has shape (height, width, 4)
-        # jpg has shape (height, width, 3)
         img0_warped = self.toRGB(img0_warped)
         img1_warped = self.toRGB(img1_warped)
 
-        # Find where both images overlap; in that region average their values
-        mask = (img0_warped != 0) & (img1_warped != 0)
-
         # overlay
-        overlay = img0_warped + img1_warped  # works with jpg, but not with png
-        overlay[mask] /= 2
+        overlay = img0_warped + img1_warped
+
+        # Find where both images overlap; in that region average their values
+        if(not self.detectEdgesBool):
+            mask = (img0_warped != 0) & (img1_warped != 0)
+            overlay[mask] /= 2
 
         # display
-        plt.imshow(overlay)
+        if(self.detectEdgesBool):
+            plt.imshow(overlay, cmap=plt.cm.gray)
+        else:
+            plt.imshow(overlay)
         plt.show()
 
 
