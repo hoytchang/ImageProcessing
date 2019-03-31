@@ -133,15 +133,16 @@ class AlignWorkerThread(Thread):
         plt.close()
 
     def toRGB(self, img):
-        # convert png to jgp
-        # png has shape (height, width, 4)
-        # jpg has shape (height, width, 3)
         try:
             img.shape[2]
         except:
-            return img
+            # convert greyscale to jpg
+            return color.gray2rgb(img)
 
         if(img.shape[2] == 4):
+            # convert png to jgp
+            # png has shape (height, width, 4)
+            # jpg has shape (height, width, 3)
             return color.rgba2rgb(img)
         else:
             return img
@@ -183,10 +184,7 @@ class AlignWorkerThread(Thread):
         overlay[mask] /= 2
 
         # display
-        if(self.detectEdgesBool):
-            plt.imshow(overlay)#, cmap=plt.cm.gray)
-        else:
-            plt.imshow(overlay)
+        plt.imshow(overlay)
         plt.show()
 
 
