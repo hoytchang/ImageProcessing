@@ -2,7 +2,7 @@ import wx
 import os
 from threading import Thread
 import skimage
-from skimage import io, transform
+from skimage import io, transform, color, util
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -100,8 +100,20 @@ class AlignWorkerThread(Thread):
     def detectEdges(self, img):
         img_grey = skimage.color.rgb2grey(img)
         edge_sobel = skimage.filters.sobel(img_grey)
-        edge_inverted = skimage.util.invert(edge_sobel)
+        edge_inverted = util.invert(edge_sobel)
         return edge_inverted
+
+    def tint(self, img):
+        red_multiplier = [1,0,0] # red inverts to light blue
+        green_multiplier = [0,1,0] # green inverts to magenta
+        blue_multiplier = [0,0,1] # blue inverts to yellow
+        yellow_multiplier = [1,1,0]
+        no_tint = [1,1,1]
+        img = color.gray2rgb(img)
+        img = util.invert(img)
+        img = yellow_multiplier * img
+        img = util.invert(img)
+        return img
 
     def choose_corresponding_points(self, img0, img1):
         """Utility function for finding corresponding features in images.
@@ -109,8 +121,10 @@ class AlignWorkerThread(Thread):
         """
         f, (ax0, ax1) = plt.subplots(1, 2)
         if(self.detectEdgesBool):
+            img1tinted = self.tint(img1)
             ax0.imshow(img0, cmap=plt.cm.gray)
-            ax1.imshow(img1, cmap=plt.cm.gray)
+            ax1.imshow(img1tinted)
+            #ax1.imshow(img1, cmap=plt.cm.gray)
         else:
             ax0.imshow(img0)
             ax1.imshow(img1)
@@ -128,7 +142,7 @@ class AlignWorkerThread(Thread):
             return img
 
         if(img.shape[2] == 4):
-            return skimage.color.rgba2rgb(img)
+            return color.rgba2rgb(img)
         else:
             return img
 
@@ -159,16 +173,18 @@ class AlignWorkerThread(Thread):
         img1_warped = self.toRGB(img1_warped)
 
         # overlay
-        overlay = img0_warped + img1_warped
+        if(self.detectEdgesBool):
+            img0_warped = color.gray2rgb(img0_warped)
+            img1_warped = self.tint(img1_warped)
 
         # Find where both images overlap; in that region average their values
-        if(not self.detectEdgesBool):
-            mask = (img0_warped != 0) & (img1_warped != 0)
-            overlay[mask] /= 2
+        overlay = img0_warped + img1_warped
+        mask = (img0_warped != 0) & (img1_warped != 0)
+        overlay[mask] /= 2
 
         # display
         if(self.detectEdgesBool):
-            plt.imshow(overlay, cmap=plt.cm.gray)
+            plt.imshow(overlay)#, cmap=plt.cm.gray)
         else:
             plt.imshow(overlay)
         plt.show()
